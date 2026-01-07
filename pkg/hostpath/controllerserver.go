@@ -131,8 +131,10 @@ func (hpc *hostPathController) CreateVolume(ctx context.Context, req *csi.Create
 	if err != nil {
 		return nil, err
 	}
-	topologies := []*csi.Topology{}
-	topologies = append(topologies, &csi.Topology{Segments: map[string]string{TopologyKeyNode: hpc.cfg.NodeID}})
+	// topologies := []*csi.Topology{}
+	// topologies = append(topologies, &csi.Topology{Segments: map[string]string{TopologyKeyNode: hpc.cfg.NodeID}})
+
+	var topologies []*csi.Topology = nil
 
 	if exists, err := checkPathExist(filepath.Join(hpc.cfg.StoragePoolInfo[storagePoolName].Path, req.GetName())); err != nil {
 		return nil, err
@@ -579,7 +581,8 @@ func (hpc *hostPathController) restoreFromSnapshot(snapshotId, storagePoolName, 
 	if _, ok := hpc.snapshotproviders[storagePoolName]; !ok {
 		return fmt.Errorf("unable to restore snapshot because unable to locate snapshot provider for storage pool %s", storagePoolName)
 	}
-	return hpc.snapshotproviders[storagePoolName].RestoreSnapshot(snapshotId, targetVolume)
+	targetPath := filepath.Join(hpc.cfg.StoragePoolInfo[storagePoolName].Path, targetVolume)
+	return hpc.snapshotproviders[storagePoolName].RestoreSnapshot(snapshotId, targetPath)
 }
 
 func (hpc *hostPathController) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {

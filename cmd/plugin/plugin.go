@@ -32,7 +32,6 @@ func main() {
 	defer klog.Flush()
 	cfg := &hostpath.Config{}
 	var dataDir string
-	klog.InitFlags(nil)
 	flag.Set("logtostderr", "true")
 	flag.StringVar(&cfg.Endpoint, "endpoint", "unix://tmp/csi.sock", "CSI endpoint")
 	flag.StringVar(&cfg.DriverName, "drivername", "hostpath.csi.kubevirt.io", "name of the driver")

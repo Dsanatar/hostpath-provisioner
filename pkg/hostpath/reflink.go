@@ -64,7 +64,25 @@ const (
 )
 
 func reflinkCopy(src, dst string) error {
-	cmd := exec.Command("cp", "-r", "--reflink=always", src, dst)
+	// Convert to absolute paths if they are relative
+	// absSrc, err := filepath.Abs(src)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get absolute path for source %s: %w", src, err)
+	// }
+	// absDst, err := filepath.Abs(dst)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get absolute path for destination %s: %w", dst, err)
+	// }
+
+	// klog.Infof("danny: COPYING %s into %s", absSrc, absDst)
+	// cmd := exec.Command("cp", "-r", "--reflink=auto", absSrc, absDst)
+	// if err := cmd.Run(); err != nil {
+	// 	return fmt.Errorf("failed to copy %s to %s: %w", absSrc, absDst, err)
+	// }
+
+	// need -p to preserve the file permissions
+	klog.Infof("danny: COPYING %s into %s", src, dst)
+	cmd := exec.Command("cp", "-rp", "--reflink=auto", src, dst)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to copy %s to %s: %w", src, dst, err)
 	}
@@ -152,13 +170,17 @@ func (r *Reflink) GetAllSnapshots() ([]csi.Snapshot, error) {
 
 func (r *Reflink) CreateSnapshot(snapshotId, sourceVolumeId string) (*csi.Snapshot, error) {
 	// Check if the source volume exists, so we can snapshot it.
-	sourceDir := filepath.Join(r.sourcePath, sourceVolumeId)
-	if exists, err := checkPathExist(sourceDir); err != nil {
+	sourcePoolDir := filepath.Join(r.sourcePath, sourceVolumeId)
+	klog.Infof("danny: sourcePoolDir %s", sourcePoolDir)
+	if exists, err := checkPathExist(sourcePoolDir); err != nil {
 		return nil, err
 	} else if exists {
 		snapshotDir := filepath.Join(r.path, snapshotId, dataPath)
 		sourceDir := filepath.Join(r.path, snapshotId, sourceVolumeId)
 		snapshotExists, err := checkPathExist(snapshotDir)
+		klog.Infof("danny: snapshotdir %s", snapshotDir)
+		klog.Infof("danny: sourceDir %s", sourceDir)
+
 		if err != nil {
 			return nil, err
 		} else if snapshotExists {
@@ -170,12 +192,14 @@ func (r *Reflink) CreateSnapshot(snapshotId, sourceVolumeId string) (*csi.Snapsh
 		if err := os.MkdirAll(sourceDir, 0755); err != nil {
 			return nil, err
 		}
-		if err := CopyReflinkFunc(sourceDir, snapshotDir); err != nil {
+		// Use "/." to copy contents of source PVC into snapshot data dir, not the PVC directory itself
+		sourcePoolDirContents := sourcePoolDir + "/."
+		if err := CopyReflinkFunc(sourcePoolDirContents, snapshotDir); err != nil {
 			return nil, err
 		}
 		return r.createSnapshotFromDir(snapshotId, sourceVolumeId, snapshotDir)
 	}
-	return nil, fmt.Errorf("source volume %s not found, unable to create snapshot", sourceDir)
+	return nil, fmt.Errorf("source volume %s not found, unable to create snapshot", sourcePoolDir)
 }
 
 func (r *Reflink) createSnapshotFromDir(snapshotId, sourceVolumeId, path string) (*csi.Snapshot, error) {
@@ -205,12 +229,19 @@ func (r *Reflink) DeleteSnapshot(snapshotId string) error {
 
 func (r *Reflink) RestoreSnapshot(snapshotId, targetPath string) error {
 	snapPath := filepath.Join(r.path, snapshotId, dataPath)
+	klog.Infof("danny: snapPath %s", snapPath)
 	if exists, err := checkPathExist(snapPath); err != nil {
 		return err
 	} else if exists {
-		if err := os.Mkdir(targetPath, 0755); err != nil {
+		// Target directory should already exist (created by CreateVolume)
+		if exists, err := checkPathExist(targetPath); err != nil {
 			return err
+		} else if !exists {
+			return fmt.Errorf("target path %s does not exist", targetPath)
 		}
+
+		// copy the contents of data/ and not the directory itself
+		snapPath = snapPath + "/."
 		if err := CopyReflinkFunc(snapPath, targetPath); err != nil {
 			return err
 		}
