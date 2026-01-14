@@ -48,17 +48,18 @@ func NewHostPathController(config *Config) *hostPathController {
 		if storagePoolInfo.SnapshotProvider == nil {
 			continue
 		}
-		switch *storagePoolInfo.SnapshotProvider {
-		case ReflinkProvider:
-			snapshotProviders[storagePool] = &Reflink{
-				path:       *storagePoolInfo.SnapshotPath,
-				nodeName:   config.NodeID,
-				sourcePath: storagePoolInfo.Path,
-			}
-			// case KopiaProvider:
-			// 	snapshotProviders[storagePool] = &Kopia{
-			// 	},
+		// switch *storagePoolInfo.SnapshotProvider {
+		// case ReflinkProvider:
+		// TODO, only really needs to be one provider?
+		snapshotProviders[storagePool] = &Reflink{
+			path:       *storagePoolInfo.SnapshotPath,
+			nodeName:   config.NodeID,
+			sourcePath: storagePoolInfo.Path,
 		}
+		// case KopiaProvider:
+		// 	snapshotProviders[storagePool] = &Kopia{
+		// 	},
+		//}
 	}
 	return &hostPathController{
 		cfg:               config,
@@ -131,10 +132,12 @@ func (hpc *hostPathController) CreateVolume(ctx context.Context, req *csi.Create
 	if err != nil {
 		return nil, err
 	}
-	// topologies := []*csi.Topology{}
-	// topologies = append(topologies, &csi.Topology{Segments: map[string]string{TopologyKeyNode: hpc.cfg.NodeID}})
+	topologies := []*csi.Topology{}
 
-	var topologies []*csi.Topology = nil
+	// if the storage pool pvc is RWO, apply node affinity.
+	if !hpc.cfg.StoragePoolInfo[storagePoolName].Shared {
+		topologies = append(topologies, &csi.Topology{Segments: map[string]string{TopologyKeyNode: hpc.cfg.NodeID}})
+	}
 
 	if exists, err := checkPathExist(filepath.Join(hpc.cfg.StoragePoolInfo[storagePoolName].Path, req.GetName())); err != nil {
 		return nil, err
