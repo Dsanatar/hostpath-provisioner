@@ -53,7 +53,7 @@ type SnapshotProviderType string
 
 const (
 	ReflinkProvider SnapshotProviderType = "reflink"
-	KopiaProvider   SnapshotProviderType = "kopia"
+	// KopiaProvider   SnapshotProviderType = "kopia"
 )
 
 // StoragePoolInfo contains the name and path of a storage pool.
